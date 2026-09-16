@@ -1,28 +1,44 @@
 # MOSMIX Rain Predict
 
-Home-Assistant-Integration, die Regenwahrscheinlichkeits-Sensoren direkt
-aus der **MOSMIX_L**-Vorhersage des Deutschen Wetterdienstes (DWD)
-bereitstellt — ohne Drittanbieter-Wetter-API dazwischen.
+Home-Assistant-Integration, die dir sagt, wie wahrscheinlich es in 2, 4
+oder 8 Stunden regnet — mit Daten direkt vom Deutschen Wetterdienst
+(DWD), nicht von irgendeiner Drittanbieter-Wetter-App.
 
 ## Was sie macht
 
-- Lädt den offiziellen DWD-MOSMIX-Stationskatalog und ermittelt die
-  nächstgelegene Vorhersagestation zu einem über die UI konfigurierten
-  Standort.
-- Lädt die MOSMIX_L-Vorhersage (KMZ/KML) dieser Station direkt von
-  `opendata.dwd.de`.
-- Liest drei DWD-Niederschlagswahrscheinlichkeits-Elemente für +2h/+4h/+8h
-  aus, macht daraus insgesamt 9 Sensoren:
-  - **Regenwahrscheinlichkeit in 2h/4h/8h** (`wwP`)
-  - **Regenwahrscheinlichkeit >0,1mm in 2h/4h/8h** (`R101`)
-  - **Regenwahrscheinlichkeit >1,0mm in 2h/4h/8h** (`R110`)
-- Aktualisiert alle 30 Minuten (der DWD veröffentlicht alle 6 Stunden
-  einen neuen MOSMIX_L-Lauf).
+Nach der Einrichtung bekommst du 9 neue Sensoren in Home Assistant, die
+jeweils einen Prozentwert (0–100 %) anzeigen: die Regenwahrscheinlichkeit
+in 2, 4 und 8 Stunden. Diese Werte kannst du ganz normal für
+Automationen nutzen, z.B. "wenn Regenwahrscheinlichkeit in 2h über 60 %,
+schicke eine Benachrichtigung 'Wäsche reinholen'".
 
-Jeder Sensor liefert DWD-Stations-ID/-Name/-Entfernung sowie den exakten
-Vorhersage-Zeitpunkt als Attribute.
+Es gibt davon drei Varianten, weil "Regenwahrscheinlichkeit" nicht
+gleich "Regenwahrscheinlichkeit" ist:
 
-## Definition der Elemente (exakt, aus den DWD-Metadaten)
+- **Regenwahrscheinlichkeit** – wie wahrscheinlich ist überhaupt
+  irgendein Niederschlag, und sei es nur ein bisschen Nieselregen.
+  Das ist der Wert, den die meisten Wetter-Apps als Hauptzahl zeigen.
+- **Regenwahrscheinlichkeit >0,1mm** – wie wahrscheinlich ist
+  spürbarer, aber noch leichter Regen.
+- **Regenwahrscheinlichkeit >1,0mm** – wie wahrscheinlich ist
+  richtiger, deutlich nasser Regen.
+
+Alle drei gibt es jeweils für 2h, 4h und 8h im Voraus — macht 3 × 3 = 9
+Sensoren.
+
+Im Hintergrund läuft das so: Die Integration sucht sich automatisch die
+dir am nächsten liegende Wetterstation des DWD und holt von dort alle 30
+Minuten die aktuelle Vorhersage. Das passiert automatisch im
+Hintergrund — du musst dich um nichts kümmern, es ist kein Account und
+kein API-Schlüssel nötig. Jeder Sensor zeigt zusätzlich als Info an,
+welche Station verwendet wird, wie weit sie entfernt ist, und für welchen
+genauen Zeitpunkt der Wert gilt.
+
+## Technische Details zu den Elementen (für Interessierte)
+
+Der Rest dieses Abschnitts ist nur für Leute interessant, die genau
+wissen wollen, was die DWD-Werte im Detail bedeuten. Für die normale
+Nutzung reicht das Verständnis aus dem Abschnitt oben.
 
 Quelle: [`MetElementDefinition.xml`](https://opendata.dwd.de/weather/lib/MetElementDefinition.xml),
 der offizielle Elementkatalog des DWD.
@@ -85,7 +101,7 @@ Verbindung zum/Zugehörigkeit zum DWD.
 
 - Alle drei Elemente sind Wahrscheinlichkeiten mit Stundenauflösung für
   ein einstündiges Fenster, das am passenden Zeitschritt endet — keine
-  Momentaufnahmen. Siehe "Definition der Elemente" oben.
+  Momentaufnahmen. Siehe "Technische Details zu den Elementen" oben.
 - Beim Ändern des Standorts über den Options-Flow werden alle 9 Sensoren
   auf die neue nächstgelegene Station umgestellt; die bisherige
   Vorhersagehistorie (Sensor-Verlauf) bleibt unter derselben Entity-ID

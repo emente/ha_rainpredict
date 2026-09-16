@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MOSMIX Rain Predict",
+        "description": "Rain probability based on DWD MOSMIX_L (element wwP) for the nearest weather station.",
+        "data": {
+          "latitude": "Latitude",
+          "longitude": "Longitude"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach opendata.dwd.de or the forecast data could not be parsed."
+    },
+    "abort": {
+      "already_configured": "An instance for these coordinates is already configured."
+    }
+  }
+}

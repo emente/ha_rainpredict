@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MOSMIX Rain Predict",
+        "description": "Regenwahrscheinlichkeit auf Basis von DWD MOSMIX_L (Element wwP) für die nächstgelegene Wetterstation.",
+        "data": {
+          "latitude": "Breitengrad",
+          "longitude": "Längengrad"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zu opendata.dwd.de fehlgeschlagen oder Daten konnten nicht verarbeitet werden."
+    },
+    "abort": {
+      "already_configured": "Für diese Koordinaten ist bereits eine Instanz konfiguriert."
+    }
+  }
+}

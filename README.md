@@ -1,50 +1,86 @@
 # MOSMIX Rain Predict
 
-Home Assistant custom integration that provides rain-probability sensors
-sourced directly from the German Weather Service's (DWD) **MOSMIX_L**
-forecast — no third-party weather API in between.
+Home-Assistant-Integration, die Regenwahrscheinlichkeits-Sensoren direkt
+aus der **MOSMIX_L**-Vorhersage des Deutschen Wetterdienstes (DWD)
+bereitstellt — ohne Drittanbieter-Wetter-API dazwischen.
 
-## What it does
+## Was sie macht
 
-- Downloads the official DWD MOSMIX station catalog and finds the nearest
-  forecast station to a location you configure through the UI.
-- Downloads that station's MOSMIX_L forecast (KMZ/KML) directly from
+- Lädt den offiziellen DWD-MOSMIX-Stationskatalog und ermittelt die
+  nächstgelegene Vorhersagestation zu einem über die UI konfigurierten
+  Standort.
+- Lädt die MOSMIX_L-Vorhersage (KMZ/KML) dieser Station direkt von
   `opendata.dwd.de`.
-- Reads the `wwP` element (general probability of precipitation, %,
-  hourly resolution) and exposes three sensors:
-  - **Regenwahrscheinlichkeit in 2h**
-  - **Regenwahrscheinlichkeit in 4h**
-  - **Regenwahrscheinlichkeit in 8h**
-- Refreshes every 30 minutes (DWD publishes a new MOSMIX_L run every 6
-  hours).
+- Liest drei DWD-Niederschlagswahrscheinlichkeits-Elemente für +2h/+4h/+8h
+  aus, macht daraus insgesamt 9 Sensoren:
+  - **Regenwahrscheinlichkeit in 2h/4h/8h** (`wwP`)
+  - **Regenwahrscheinlichkeit >0,1mm in 2h/4h/8h** (`R101`)
+  - **Regenwahrscheinlichkeit >1,0mm in 2h/4h/8h** (`R110`)
+- Aktualisiert alle 30 Minuten (der DWD veröffentlicht alle 6 Stunden
+  einen neuen MOSMIX_L-Lauf).
 
-Each sensor exposes the DWD station id/name/distance and the exact
-forecast-valid timestamp as attributes.
+Jeder Sensor liefert DWD-Stations-ID/-Name/-Entfernung sowie den exakten
+Vorhersage-Zeitpunkt als Attribute.
 
-## Installation via HACS
+## Definition der Elemente (exakt, aus den DWD-Metadaten)
 
-1. In Home Assistant, go to **HACS → ⋮ → Custom repositories**.
-2. Add this repository's URL with category **Integration**.
-3. Install **MOSMIX Rain Predict**, then restart Home Assistant.
-4. Go to **Settings → Devices & Services → Add Integration**, search for
-   **MOSMIX Rain Predict**.
-5. Confirm or adjust the latitude/longitude (defaults to your Home
-   Assistant location) and submit.
+Quelle: [`MetElementDefinition.xml`](https://opendata.dwd.de/weather/lib/MetElementDefinition.xml),
+der offizielle Elementkatalog des DWD.
 
-The location is only read once at setup time. To move the sensors to a
-different location, remove and re-add the integration with new
-coordinates.
+| Element | Einheit | Offizielle DWD-Beschreibung | Übersetzung |
+|---|---|---|---|
+| `wwP` | % (0–100) | Probability: Occurrence of precipitation within the last hour | Wahrscheinlichkeit: Auftreten von Niederschlag innerhalb der letzten Stunde |
+| `R101` | % (0–100) | Probability of precipitation > 0.1 mm during the last hour | Wahrscheinlichkeit für Niederschlag > 0,1 mm innerhalb der letzten Stunde |
+| `R110` | % (0–100) | Probability of precipitation > 1.0 mm during the last hour | Wahrscheinlichkeit für Niederschlag > 1,0 mm innerhalb der letzten Stunde |
 
-## Data source & attribution
+**Was "innerhalb der letzten Stunde" praktisch bedeutet:** Jeder
+MOSMIX_L-Zeitschritt ist stündlich. Der Wert zum Zeitpunkt *T* ist die
+Wahrscheinlichkeit, dass der jeweilige Niederschlags-Zustand irgendwann
+innerhalb des **einstündigen Fensters, das bei *T* endet**, aufgetreten
+ist — keine Momentaufnahme im Sinne von "regnet es gerade jetzt". Da die
+"+2h/+4h/+8h"-Sensoren auf den nächstgelegenen stündlichen Zeitschritt
+einrasten (MOSMIX_L ist an volle UTC-Stunden gebunden, nicht an die
+Sekunde des letzten Sensor-Updates), kann das tatsächlich beschriebene
+Fenster bis zu ~30 Minuten von einem wörtlichen "in N Stunden ab jetzt"
+abweichen. Das exakte Fensterende steht immer im Attribut
+`forecast_valid_time` jedes Sensors.
 
-Forecast data: Deutscher Wetterdienst (DWD), MOSMIX_L, via
-[opendata.dwd.de](https://opendata.dwd.de). No API key required, no
-affiliation with DWD.
+**Wie die drei Elemente zusammen zu lesen sind:** `wwP` beantwortet
+"tritt *irgendein* messbarer Niederschlag auf", unabhängig von der
+Menge — das ist meist der Wert, den Wetter-Apps als ihre
+Haupt-Regenwahrscheinlichkeit zeigen. `R101` und `R110` beantworten die
+strengere Frage "wird eine bestimmte Rate *überschritten*" (0,1 mm/h ≈
+Schwelle für leichten Nieselregen, 1,0 mm/h ≈ spürbarer Regen) — nützlich
+für Automationen, die nur auf Regen reagieren sollen, den man tatsächlich
+spürt, nicht auf einen einzelnen erkennbaren Tropfen. Da die Schwellen
+kumulativ sind, sollten die Werte zur selben Vorhersagestunde von
+`wwP` → `R101` → `R110` abnehmen.
 
-## Limitations
+## Installation über HACS
 
-- `wwP` is DWD's general precipitation-probability element; it is not
-  threshold-specific (compare to `R101`, `R110`, etc. for probability of
-  exceeding a specific mm/h amount).
-- Coordinates are fixed at setup (no options flow yet) — reconfigure by
-  removing and re-adding the integration.
+1. In Home Assistant: **HACS → ⋮ → Benutzerdefinierte Repositories**.
+2. URL dieses Repositories mit Kategorie **Integration** hinzufügen.
+3. **MOSMIX Rain Predict** installieren, danach Home Assistant neu
+   starten.
+4. **Einstellungen → Geräte & Dienste → Integration hinzufügen**, nach
+   **MOSMIX Rain Predict** suchen.
+5. Breiten-/Längengrad bestätigen oder anpassen (vorbelegt mit dem
+   Home-Assistant-Standort) und absenden.
+
+Der Standort wird nur einmal beim Einrichten gelesen. Um die Sensoren an
+einen anderen Ort zu verschieben, die Integration entfernen und mit neuen
+Koordinaten erneut hinzufügen.
+
+## Datenquelle & Attribution
+
+Vorhersagedaten: Deutscher Wetterdienst (DWD), MOSMIX_L, über
+[opendata.dwd.de](https://opendata.dwd.de). Kein API-Key nötig, keine
+Verbindung zum/Zugehörigkeit zum DWD.
+
+## Einschränkungen
+
+- Alle drei Elemente sind Wahrscheinlichkeiten mit Stundenauflösung für
+  ein einstündiges Fenster, das am passenden Zeitschritt endet — keine
+  Momentaufnahmen. Siehe "Definition der Elemente" oben.
+- Koordinaten werden beim Einrichten fest gesetzt (noch kein Options-Flow)
+  — zum Ändern die Integration entfernen und neu hinzufügen.

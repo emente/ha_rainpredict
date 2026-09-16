@@ -21,7 +21,9 @@ KMZ_URL_TEMPLATE = (
     "single_stations/{station}/kml/MOSMIX_L_LATEST_{station}.kmz"
 )
 FORECAST_HOURS = (2, 4, 8)
-ELEMENT_NAME = "wwP"  # general probability of precipitation (%), hourly
+# wwP: probability of any precipitation within the last hour (general).
+# R101/R110: probability of precipitation exceeding 0.1mm / 1.0mm within the last hour.
+ELEMENT_NAMES = ("wwP", "R101", "R110")
 
 DWD_NS = "https://opendata.dwd.de/weather/lib/pointforecast_dwd_extension_V1_0.xsd"
 NS = {"kml": "http://www.opengis.net/kml/2.2", "dwd": DWD_NS}
@@ -94,7 +96,7 @@ def _load_kml(station_id: str) -> bytes:
         raise MosmixError(f"Unexpected MOSMIX archive for station {station_id}: {err}") from err
 
 
-def _parse_forecast(kml_bytes: bytes, station_id: str, element_name: str):
+def _parse_forecast(kml_bytes: bytes, station_id: str, element_names: tuple[str, ...]):
     root = ET.fromstring(kml_bytes)
     timesteps = [
         datetime.strptime(ts.text, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
@@ -110,16 +112,21 @@ def _parse_forecast(kml_bytes: bytes, station_id: str, element_name: str):
     if placemark is None:
         raise MosmixError(f"Station {station_id} not found in MOSMIX KML")
 
-    values = None
+    remaining = set(element_names)
+    values_by_element: dict[str, list[str]] = {}
     for forecast in placemark.findall(".//dwd:Forecast", NS):
-        if forecast.get(f"{{{DWD_NS}}}elementName") == element_name:
-            values = forecast.find("dwd:value", NS).text.split()
-            break
-    if values is None:
-        raise MosmixError(f"Element {element_name} not present for station {station_id}")
-    if len(values) != len(timesteps):
-        raise MosmixError("Timestep/value count mismatch in MOSMIX KML")
-    return timesteps, values
+        name = forecast.get(f"{{{DWD_NS}}}elementName")
+        if name in remaining:
+            values_by_element[name] = forecast.find("dwd:value", NS).text.split()
+            remaining.discard(name)
+            if not remaining:
+                break
+    if remaining:
+        raise MosmixError(f"Elements {sorted(remaining)} not present for station {station_id}")
+    for name, values in values_by_element.items():
+        if len(values) != len(timesteps):
+            raise MosmixError(f"Timestep/value count mismatch for {name} in MOSMIX KML")
+    return timesteps, values_by_element
 
 
 def _nearest_value(timesteps, values, target):
@@ -129,11 +136,17 @@ def _nearest_value(timesteps, values, target):
     return value, timesteps[idx]
 
 
-def fetch_rain_forecast(stations: list[dict], latitude: float, longitude: float) -> dict:
+def fetch_rain_forecast(
+    stations: list[dict],
+    latitude: float,
+    longitude: float,
+    element_names: tuple[str, ...] = ELEMENT_NAMES,
+    forecast_hours: tuple[int, ...] = FORECAST_HOURS,
+) -> dict:
     """Fetch the current MOSMIX_L rain-probability forecast for the nearest station."""
     station = find_nearest_station(stations, latitude, longitude)
     kml_bytes = _load_kml(station["id"])
-    timesteps, values = _parse_forecast(kml_bytes, station["id"], ELEMENT_NAME)
+    timesteps, values_by_element = _parse_forecast(kml_bytes, station["id"], element_names)
 
     now = datetime.now(timezone.utc)
     result = {
@@ -143,9 +156,13 @@ def fetch_rain_forecast(stations: list[dict], latitude: float, longitude: float)
         "station_lon": round(station["lon"], 4),
         "distance_km": round(_haversine_km(latitude, longitude, station["lat"], station["lon"]), 1),
         "updated": now,
-        "probabilities": {},
+        "elements": {},
     }
-    for hours in FORECAST_HOURS:
-        prob, matched_time = _nearest_value(timesteps, values, now + timedelta(hours=hours))
-        result["probabilities"][hours] = {"value": prob, "time": matched_time}
+    for element in element_names:
+        values = values_by_element[element]
+        by_hour = {}
+        for hours in forecast_hours:
+            prob, matched_time = _nearest_value(timesteps, values, now + timedelta(hours=hours))
+            by_hour[hours] = {"value": prob, "time": matched_time}
+        result["elements"][element] = by_hour
     return result

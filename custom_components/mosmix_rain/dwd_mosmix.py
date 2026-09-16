@@ -10,7 +10,7 @@ import math
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 STATION_CATALOG_URL = (
     "https://www.dwd.de/DE/leistungen/met_verfahren_mosmix/"
@@ -129,11 +129,43 @@ def _parse_forecast(kml_bytes: bytes, station_id: str, element_names: tuple[str,
     return timesteps, values_by_element
 
 
-def _nearest_value(timesteps, values, target):
-    idx = min(range(len(timesteps)), key=lambda i: abs((timesteps[i] - target).total_seconds()))
-    raw = values[idx]
-    value = None if raw == "-" else round(float(raw))
-    return value, timesteps[idx]
+def _combine_probabilities(hourly_values: list[int | None]) -> int | None:
+    """Combine independent hourly rain-probabilities into "at least one hour rains".
+
+    Uses the standard 1 - prod(1 - p_i) formula, which assumes the hourly
+    outcomes are independent. Real weather is autocorrelated (rain in one
+    hour makes rain in the next more, not less, likely), so this tends to
+    slightly *overestimate* the true joint probability. It is nonetheless
+    the closest approximation obtainable from MOSMIX's per-hour values,
+    since DWD does not publish a native 2h/4h/8h cumulative element.
+    """
+    if not hourly_values or any(v is None for v in hourly_values):
+        return None
+    no_rain_at_all = 1.0
+    for v in hourly_values:
+        no_rain_at_all *= 1 - v / 100.0
+    return round((1 - no_rain_at_all) * 100)
+
+
+def _window_probability(timesteps, values, now, hours):
+    """Probability that the event occurs at least once in the next `hours` hours.
+
+    Combines the hourly buckets strictly after `now`, i.e. timesteps
+    (now, now+hours] on the hourly grid - up to ~1h of look-back overlap
+    with the present is inherent to hourly-resolution source data.
+    """
+    start_idx = next((i for i, t in enumerate(timesteps) if t > now), None)
+    if start_idx is None:
+        return None, [], None
+    window_idx = range(start_idx, min(start_idx + hours, len(timesteps)))
+    window_idx = list(window_idx)
+    if len(window_idx) < hours:
+        return None, [], None  # forecast horizon too short (stale/delayed run)
+
+    hourly_values = [None if values[i] == "-" else round(float(values[i])) for i in window_idx]
+    combined = _combine_probabilities(hourly_values)
+    window_end = timesteps[window_idx[-1]]
+    return combined, hourly_values, window_end
 
 
 def fetch_rain_forecast(
@@ -143,7 +175,9 @@ def fetch_rain_forecast(
     element_names: tuple[str, ...] = ELEMENT_NAMES,
     forecast_hours: tuple[int, ...] = FORECAST_HOURS,
 ) -> dict:
-    """Fetch the current MOSMIX_L rain-probability forecast for the nearest station."""
+    """Fetch, for the nearest station, the probability of the event occurring
+    at least once within the next 2/4/8 hours (not a single-hour snapshot).
+    """
     station = find_nearest_station(stations, latitude, longitude)
     kml_bytes = _load_kml(station["id"])
     timesteps, values_by_element = _parse_forecast(kml_bytes, station["id"], element_names)
@@ -160,9 +194,13 @@ def fetch_rain_forecast(
     }
     for element in element_names:
         values = values_by_element[element]
-        by_hour = {}
+        by_window = {}
         for hours in forecast_hours:
-            prob, matched_time = _nearest_value(timesteps, values, now + timedelta(hours=hours))
-            by_hour[hours] = {"value": prob, "time": matched_time}
-        result["elements"][element] = by_hour
+            combined, hourly_values, window_end = _window_probability(timesteps, values, now, hours)
+            by_window[hours] = {
+                "value": combined,
+                "hourly_values": hourly_values,
+                "window_end": window_end,
+            }
+        result["elements"][element] = by_window
     return result

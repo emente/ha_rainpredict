@@ -24,7 +24,12 @@ async def async_setup_entry(
 
 
 class MosmixRainProbabilitySensor(CoordinatorEntity[MosmixRainCoordinator], SensorEntity):
-    """Rain probability N hours from now for one DWD MOSMIX_L element."""
+    """Probability that the event occurs at least once within the next N hours.
+
+    This is a combined ("at least one of the next N hourly buckets rains")
+    probability, not a single-hour snapshot N hours from now - see
+    dwd_mosmix._combine_probabilities for the exact formula and its caveats.
+    """
 
     _attr_native_unit_of_measurement = "%"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -39,7 +44,7 @@ class MosmixRainProbabilitySensor(CoordinatorEntity[MosmixRainCoordinator], Sens
         super().__init__(coordinator)
         self._code = element["code"]
         self._hours = hours
-        self._attr_name = f"{element['name']} in {hours}h"
+        self._attr_name = f"{element['name']} innerhalb {hours}h"
         self._attr_icon = element["icon"]
         self._attr_unique_id = f"{entry.entry_id}_{element['unique_id']}_{hours}h"
         self._attr_device_info = {
@@ -65,10 +70,12 @@ class MosmixRainProbabilitySensor(CoordinatorEntity[MosmixRainCoordinator], Sens
         data = self.coordinator.data
         if not data:
             return {}
-        prob = data["elements"][self._code][self._hours]
+        window = data["elements"][self._code][self._hours]
         return {
             "element": self._code,
-            "forecast_valid_time": prob["time"].isoformat() if prob["time"] else None,
+            "window_hours": self._hours,
+            "window_end": window["window_end"].isoformat() if window["window_end"] else None,
+            "hourly_values": window["hourly_values"],
             "station_id": data["station_id"],
             "station_name": data["station_name"],
             "station_distance_km": data["distance_km"],

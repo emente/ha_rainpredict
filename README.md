@@ -7,10 +7,13 @@ oder 8 Stunden regnet — mit Daten direkt vom Deutschen Wetterdienst
 ## Was sie macht
 
 Nach der Einrichtung bekommst du 9 neue Sensoren in Home Assistant, die
-jeweils einen Prozentwert (0–100 %) anzeigen: die Regenwahrscheinlichkeit
-in 2, 4 und 8 Stunden. Diese Werte kannst du ganz normal für
-Automationen nutzen, z.B. "wenn Regenwahrscheinlichkeit in 2h über 60 %,
-schicke eine Benachrichtigung 'Wäsche reinholen'".
+jeweils einen Prozentwert (0–100 %) anzeigen: die Wahrscheinlichkeit,
+dass es **irgendwann innerhalb der nächsten 2, 4 bzw. 8 Stunden**
+regnet — nicht nur in einer einzelnen Stunde weit in der Zukunft,
+sondern über den ganzen Zeitraum ab jetzt betrachtet. Diese Werte
+kannst du ganz normal für Automationen nutzen, z.B. "wenn
+Regenwahrscheinlichkeit innerhalb 2h über 60 %, schicke eine
+Benachrichtigung 'Wäsche reinholen'".
 
 Es gibt davon drei Varianten, weil "Regenwahrscheinlichkeit" nicht
 gleich "Regenwahrscheinlichkeit" ist:
@@ -31,8 +34,8 @@ dir am nächsten liegende Wetterstation des DWD und holt von dort alle 30
 Minuten die aktuelle Vorhersage. Das passiert automatisch im
 Hintergrund — du musst dich um nichts kümmern, es ist kein Account und
 kein API-Schlüssel nötig. Jeder Sensor zeigt zusätzlich als Info an,
-welche Station verwendet wird, wie weit sie entfernt ist, und für welchen
-genauen Zeitpunkt der Wert gilt.
+welche Station verwendet wird, wie weit sie entfernt ist, und bis zu
+welchem Zeitpunkt der betrachtete Zeitraum reicht.
 
 ## Technische Details zu den Elementen (für Interessierte)
 
@@ -49,17 +52,34 @@ der offizielle Elementkatalog des DWD.
 | `R101` | % (0–100) | Probability of precipitation > 0.1 mm during the last hour | Wahrscheinlichkeit für Niederschlag > 0,1 mm innerhalb der letzten Stunde |
 | `R110` | % (0–100) | Probability of precipitation > 1.0 mm during the last hour | Wahrscheinlichkeit für Niederschlag > 1,0 mm innerhalb der letzten Stunde |
 
-**Was "innerhalb der letzten Stunde" praktisch bedeutet:** Jeder
-MOSMIX_L-Zeitschritt ist stündlich. Der Wert zum Zeitpunkt *T* ist die
-Wahrscheinlichkeit, dass der jeweilige Niederschlags-Zustand irgendwann
-innerhalb des **einstündigen Fensters, das bei *T* endet**, aufgetreten
-ist — keine Momentaufnahme im Sinne von "regnet es gerade jetzt". Da die
-"+2h/+4h/+8h"-Sensoren auf den nächstgelegenen stündlichen Zeitschritt
-einrasten (MOSMIX_L ist an volle UTC-Stunden gebunden, nicht an die
-Sekunde des letzten Sensor-Updates), kann das tatsächlich beschriebene
-Fenster bis zu ~30 Minuten von einem wörtlichen "in N Stunden ab jetzt"
-abweichen. Das exakte Fensterende steht immer im Attribut
-`forecast_valid_time` jedes Sensors.
+**Warum "kumulativ" nicht trivial ist:** Der DWD selbst liefert diese
+Elemente nur stündlich, d.h. jeder Rohwert deckt nur ein einzelnes
+1-Stunden-Fenster ab (z.B. "Wahrscheinlichkeit für Regen zwischen 11
+und 12 Uhr"). Es gibt bei DWD keinen fertigen "Wahrscheinlichkeit für
+Regen irgendwann in den nächsten 2/4/8 Stunden"-Wert für genau diese
+Zeiträume (nur fertige 6h/12h/24h-Varianten, die nicht zu unseren
+2h/4h/8h passen). Die Integration berechnet den kumulativen Wert
+deshalb selbst, aus den einzelnen Stundenwerten:
+
+```
+P(mind. 1x Regen in N Stunden) = 1 - (1-p₁) × (1-p₂) × ... × (1-p_N)
+```
+
+Dabei sind p₁...p_N die stündlichen Einzelwahrscheinlichkeiten für die
+nächsten N vollen Stunden. **Wichtige Einschränkung:** Diese Formel
+setzt voraus, dass sich Regen in einer Stunde nicht auf die
+Wahrscheinlichkeit in der nächsten Stunde auswirkt (statistische
+Unabhängigkeit). In der Realität ist Regenwetter aber "klumpig" —
+wenn es um 11 Uhr regnet, regnet es um 12 Uhr eher öfter weiter, statt
+seltener. Der berechnete Wert liegt deshalb tendenziell etwas **zu
+hoch** gegenüber der tatsächlichen Wahrscheinlichkeit. Er ist die beste
+Näherung, die sich aus den öffentlich verfügbaren MOSMIX-Stundenwerten
+bilden lässt, aber keine von DWD selbst berechnete Größe.
+
+Jeder Sensor hat als Attribut `hourly_values` die einzelnen
+Rohwahrscheinlichkeiten, aus denen sich der angezeigte Wert
+zusammensetzt, und `window_end` den Zeitpunkt, bis zu dem der Zeitraum
+reicht — zur Nachvollziehbarkeit.
 
 **Wie die drei Elemente zusammen zu lesen sind:** `wwP` beantwortet
 "tritt *irgendein* messbarer Niederschlag auf", unabhängig von der
@@ -69,7 +89,7 @@ strengere Frage "wird eine bestimmte Rate *überschritten*" (0,1 mm/h ≈
 Schwelle für leichten Nieselregen, 1,0 mm/h ≈ spürbarer Regen) — nützlich
 für Automationen, die nur auf Regen reagieren sollen, den man tatsächlich
 spürt, nicht auf einen einzelnen erkennbaren Tropfen. Da die Schwellen
-kumulativ sind, sollten die Werte zur selben Vorhersagestunde von
+kumulativ sind, sollten die Werte zum selben Zeitraum von
 `wwP` → `R101` → `R110` abnehmen.
 
 ## Installation über HACS
@@ -99,9 +119,12 @@ Verbindung zum/Zugehörigkeit zum DWD.
 
 ## Einschränkungen
 
-- Alle drei Elemente sind Wahrscheinlichkeiten mit Stundenauflösung für
-  ein einstündiges Fenster, das am passenden Zeitschritt endet — keine
-  Momentaufnahmen. Siehe "Technische Details zu den Elementen" oben.
+- Die kumulativen Werte sind eine Näherung (Unabhängigkeitsannahme über
+  die Stundenwerte) und tendenziell leicht zu hoch — keine offizielle
+  DWD-Kennzahl. Siehe "Technische Details zu den Elementen" oben.
+- Da MOSMIX_L nur stündliche Zeitschritte liefert, überschneidet sich
+  das betrachtete Zeitfenster leicht mit der laufenden Stunde (bis zu
+  ~1h Rückblick statt rein zukunftsgerichtet 0h).
 - Beim Ändern des Standorts über den Options-Flow werden alle 9 Sensoren
   auf die neue nächstgelegene Station umgestellt; die bisherige
   Vorhersagehistorie (Sensor-Verlauf) bleibt unter derselben Entity-ID

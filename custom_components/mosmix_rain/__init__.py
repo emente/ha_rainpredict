@@ -13,8 +13,8 @@ PLATFORMS = ["sensor"]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = MosmixRainCoordinator(
         hass,
-        latitude=entry.data["latitude"],
-        longitude=entry.data["longitude"],
+        latitude=entry.options.get("latitude", entry.data["latitude"]),
+        longitude=entry.options.get("longitude", entry.data["longitude"]),
     )
     await coordinator.async_config_entry_first_refresh()
 

@@ -67,9 +67,13 @@ kumulativ sind, sollten die Werte zur selben Vorhersagestunde von
 5. Breiten-/Längengrad bestätigen oder anpassen (vorbelegt mit dem
    Home-Assistant-Standort) und absenden.
 
-Der Standort wird nur einmal beim Einrichten gelesen. Um die Sensoren an
-einen anderen Ort zu verschieben, die Integration entfernen und mit neuen
-Koordinaten erneut hinzufügen.
+## Standort nachträglich ändern
+
+Über **Einstellungen → Geräte & Dienste → MOSMIX Rain Predict →
+Konfigurieren** lässt sich der Standort jederzeit ändern, ohne die
+Integration neu einzurichten. Die neuen Koordinaten werden vor dem
+Speichern gegen die DWD-API validiert; die nächstgelegene Station wird
+danach automatisch neu ermittelt.
 
 ## Datenquelle & Attribution
 
@@ -82,5 +86,7 @@ Verbindung zum/Zugehörigkeit zum DWD.
 - Alle drei Elemente sind Wahrscheinlichkeiten mit Stundenauflösung für
   ein einstündiges Fenster, das am passenden Zeitschritt endet — keine
   Momentaufnahmen. Siehe "Definition der Elemente" oben.
-- Koordinaten werden beim Einrichten fest gesetzt (noch kein Options-Flow)
-  — zum Ändern die Integration entfernen und neu hinzufügen.
+- Beim Ändern des Standorts über den Options-Flow werden alle 9 Sensoren
+  auf die neue nächstgelegene Station umgestellt; die bisherige
+  Vorhersagehistorie (Sensor-Verlauf) bleibt unter derselben Entity-ID
+  erhalten, bezieht sich aber ab dem Umschaltzeitpunkt auf den neuen Ort.

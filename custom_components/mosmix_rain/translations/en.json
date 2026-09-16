@@ -16,5 +16,20 @@
     "abort": {
       "already_configured": "An instance for these coordinates is already configured."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "MOSMIX Rain Predict - Change location",
+        "description": "New location for the rain-probability sensors. The nearest DWD station is looked up again automatically.",
+        "data": {
+          "latitude": "Latitude",
+          "longitude": "Longitude"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach opendata.dwd.de or the forecast data could not be parsed."
+    }
   }
 }

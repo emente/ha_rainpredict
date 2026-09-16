@@ -16,5 +16,20 @@
     "abort": {
       "already_configured": "Für diese Koordinaten ist bereits eine Instanz konfiguriert."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "MOSMIX Rain Predict – Standort ändern",
+        "description": "Neuer Standort für die Regenwahrscheinlichkeits-Sensoren. Die nächstgelegene DWD-Station wird automatisch neu ermittelt.",
+        "data": {
+          "latitude": "Breitengrad",
+          "longitude": "Längengrad"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zu opendata.dwd.de fehlgeschlagen oder Daten konnten nicht verarbeitet werden."
+    }
   }
 }

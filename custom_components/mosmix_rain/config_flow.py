@@ -1,4 +1,4 @@
-"""Config flow for MOSMIX Rain Predict."""
+"""Config and options flow for MOSMIX Rain Predict."""
 from __future__ import annotations
 
 import logging
@@ -6,11 +6,27 @@ import logging
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .dwd_mosmix import MosmixError, fetch_rain_forecast, load_station_catalog
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _coordinate_schema(default_lat: float, default_lon: float) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required("latitude", default=default_lat): vol.Coerce(float),
+            vol.Required("longitude", default=default_lon): vol.Coerce(float),
+        }
+    )
+
+
+async def _validate_coordinates(hass: HomeAssistant, latitude: float, longitude: float) -> dict:
+    """Fetch a forecast for the given coordinates, raising MosmixError on failure."""
+    stations = await hass.async_add_executor_job(load_station_catalog)
+    return await hass.async_add_executor_job(fetch_rain_forecast, stations, latitude, longitude)
 
 
 class MosmixRainConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -28,10 +44,7 @@ class MosmixRainConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             latitude = user_input["latitude"]
             longitude = user_input["longitude"]
             try:
-                stations = await self.hass.async_add_executor_job(load_station_catalog)
-                result = await self.hass.async_add_executor_job(
-                    fetch_rain_forecast, stations, latitude, longitude
-                )
+                result = await _validate_coordinates(self.hass, latitude, longitude)
             except MosmixError:
                 _LOGGER.exception("Could not validate MOSMIX coordinates")
                 errors["base"] = "cannot_connect"
@@ -43,10 +56,46 @@ class MosmixRainConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data={"latitude": latitude, "longitude": longitude},
                 )
 
-        schema = vol.Schema(
-            {
-                vol.Required("latitude", default=default_lat): vol.Coerce(float),
-                vol.Required("longitude", default=default_lon): vol.Coerce(float),
-            }
+        return self.async_show_form(
+            step_id="user", data_schema=_coordinate_schema(default_lat, default_lon), errors=errors
         )
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+
+    @staticmethod
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> MosmixRainOptionsFlow:
+        return MosmixRainOptionsFlow(config_entry)
+
+
+class MosmixRainOptionsFlow(config_entries.OptionsFlow):
+    """Let the user change the configured coordinates after setup."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        self.config_entry = config_entry
+
+    async def async_step_init(self, user_input=None):
+        errors: dict[str, str] = {}
+
+        default_lat = self.config_entry.options.get(
+            "latitude", self.config_entry.data["latitude"]
+        )
+        default_lon = self.config_entry.options.get(
+            "longitude", self.config_entry.data["longitude"]
+        )
+
+        if user_input is not None:
+            latitude = user_input["latitude"]
+            longitude = user_input["longitude"]
+            try:
+                await _validate_coordinates(self.hass, latitude, longitude)
+            except MosmixError:
+                _LOGGER.exception("Could not validate MOSMIX coordinates")
+                errors["base"] = "cannot_connect"
+            else:
+                return self.async_create_entry(
+                    title="", data={"latitude": latitude, "longitude": longitude}
+                )
+
+        return self.async_show_form(
+            step_id="init", data_schema=_coordinate_schema(default_lat, default_lon), errors=errors
+        )

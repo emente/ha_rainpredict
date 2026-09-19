@@ -158,6 +158,15 @@ def _combine_probabilities(hourly_values: list[int | None]) -> int | None:
     return round((1 - no_rain_at_all) * 100)
 
 
+# Lower bounds (m/s) of Beaufort forces 1..12 (WMO/DWD table).
+_BEAUFORT_LOWER_BOUNDS = (0.3, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7)
+
+
+def beaufort(speed_ms: float) -> int:
+    """Convert a wind speed in m/s to the Beaufort force (0..12)."""
+    return sum(1 for bound in _BEAUFORT_LOWER_BOUNDS if speed_ms >= bound)
+
+
 def _window_value(kind, timesteps, values, now, hours):
     """Aggregate an element over the next `hours` hours.
 

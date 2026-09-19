@@ -7,8 +7,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, ELEMENTS, FORECAST_HOURS
+from .const import BEAUFORT_NAMES, DOMAIN, ELEMENTS, FORECAST_HOURS
 from .coordinator import MosmixRainCoordinator
+from .dwd_mosmix import beaufort
 
 
 async def async_setup_entry(
@@ -73,7 +74,12 @@ class MosmixWindowSensor(CoordinatorEntity[MosmixRainCoordinator], SensorEntity)
         if not data:
             return {}
         window = data["elements"][self._code][self._hours]
+        wind_attributes = {}
+        if self.device_class == SensorDeviceClass.WIND_SPEED and window["value"] is not None:
+            force = beaufort(window["value"])
+            wind_attributes = {"beaufort": force, "beaufort_name": BEAUFORT_NAMES[force]}
         return {
+            **wind_attributes,
             "element": self._code,
             "window_hours": self._hours,
             "window_end": window["window_end"].isoformat() if window["window_end"] else None,

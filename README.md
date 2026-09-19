@@ -1,4 +1,4 @@
-# MOSMIX Rain Predict
+# MOSMIX Rain+Wind Predict
 
 Home-Assistant-Integration, die dir sagt, wie wahrscheinlich es in den
 nächsten 2, 4 oder 8 Stunden regnet und wie stark der Wind dann
@@ -43,6 +43,11 @@ der **höchste Wert, der in diesem Zeitraum erwartet wird**:
   einzelne Böe, also kurze Windspitzen. Die sind immer deutlich höher
   als der Durchschnittswind und für Dinge wie "Markise einfahren" oder
   "Sonnenschirm wegräumen" meist der bessere Auslöser.
+
+Beide Wind-Sensoren haben zusätzlich die Attribute `beaufort` (Windstärke
+0–12) und `beaufort_name` (z.B. "frische Brise", "Sturm"). Für Böen ist
+die Beaufort-Angabe nur eine Orientierung — die Skala ist eigentlich für
+den Durchschnittswind definiert.
 
 Das ergibt 2 × 3 = 6 Wind-Sensoren. Der DWD liefert die Werte in m/s;
 da die Sensoren als Windgeschwindigkeit gekennzeichnet sind, kann Home

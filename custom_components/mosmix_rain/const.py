@@ -4,6 +4,22 @@ DOMAIN = "mosmix_rain"
 UPDATE_INTERVAL_MINUTES = 30
 FORECAST_HOURS = (2, 4, 8)
 
+BEAUFORT_NAMES = (
+    "Windstille",
+    "leiser Zug",
+    "leichte Brise",
+    "schwache Brise",
+    "mäßige Brise",
+    "frische Brise",
+    "starker Wind",
+    "steifer Wind",
+    "stürmischer Wind",
+    "Sturm",
+    "schwerer Sturm",
+    "orkanartiger Sturm",
+    "Orkan",
+)
+
 # Display metadata for the DWD MOSMIX elements exposed as sensors.
 # "code" must match a key of dwd_mosmix.ELEMENT_KINDS.
 ELEMENTS = (

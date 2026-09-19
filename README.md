@@ -1,14 +1,17 @@
 # MOSMIX Rain Predict
 
-Home-Assistant-Integration, die dir sagt, wie wahrscheinlich es in 2, 4
-oder 8 Stunden regnet — mit Daten direkt vom Deutschen Wetterdienst
-(DWD), nicht von irgendeiner Drittanbieter-Wetter-App.
+Home-Assistant-Integration, die dir sagt, wie wahrscheinlich es in den
+nächsten 2, 4 oder 8 Stunden regnet und wie stark der Wind dann
+höchstens weht — mit Daten direkt vom Deutschen Wetterdienst (DWD),
+nicht von irgendeiner Drittanbieter-Wetter-App.
 
 ## Was sie macht
 
-Nach der Einrichtung bekommst du 9 neue Sensoren in Home Assistant, die
-jeweils einen Prozentwert (0–100 %) anzeigen: die Wahrscheinlichkeit,
-dass es **irgendwann innerhalb der nächsten 2, 4 bzw. 8 Stunden**
+Nach der Einrichtung bekommst du 15 neue Sensoren in Home Assistant:
+9 für Regen und 6 für Wind.
+
+**Regen:** Die 9 Regen-Sensoren zeigen jeweils einen Prozentwert
+(0–100 %): die Wahrscheinlichkeit, dass es **irgendwann innerhalb der nächsten 2, 4 bzw. 8 Stunden**
 regnet — nicht nur in einer einzelnen Stunde weit in der Zukunft,
 sondern über den ganzen Zeitraum ab jetzt betrachtet. Diese Werte
 kannst du ganz normal für Automationen nutzen, z.B. "wenn
@@ -27,7 +30,24 @@ gleich "Regenwahrscheinlichkeit" ist:
   richtiger, deutlich nasser Regen.
 
 Alle drei gibt es jeweils für 2h, 4h und 8h im Voraus — macht 3 × 3 = 9
-Sensoren.
+Regen-Sensoren.
+
+**Wind** funktioniert nach demselben Prinzip (Zeitraum ab jetzt, 2h, 4h
+und 8h), nur dass hier keine Wahrscheinlichkeit angezeigt wird, sondern
+der **höchste Wert, der in diesem Zeitraum erwartet wird**:
+
+- **Höchste Windgeschwindigkeit innerhalb 2h/4h/8h** – der stärkste
+  erwartete durchschnittliche Wind (wie er auch in Wetterberichten
+  angegeben wird).
+- **Höchste Windböe innerhalb 2h/4h/8h** – die stärkste erwartete
+  einzelne Böe, also kurze Windspitzen. Die sind immer deutlich höher
+  als der Durchschnittswind und für Dinge wie "Markise einfahren" oder
+  "Sonnenschirm wegräumen" meist der bessere Auslöser.
+
+Das ergibt 2 × 3 = 6 Wind-Sensoren. Der DWD liefert die Werte in m/s;
+da die Sensoren als Windgeschwindigkeit gekennzeichnet sind, kann Home
+Assistant sie in deiner bevorzugten Einheit (z.B. km/h) anzeigen — das
+lässt sich in den Entitäts-Einstellungen des Sensors umstellen.
 
 Im Hintergrund läuft das so: Die Integration sucht sich automatisch die
 dir am nächsten liegende Wetterstation des DWD und holt von dort alle 30
@@ -51,6 +71,8 @@ der offizielle Elementkatalog des DWD.
 | `wwP` | % (0–100) | Probability: Occurrence of precipitation within the last hour | Wahrscheinlichkeit: Auftreten von Niederschlag innerhalb der letzten Stunde |
 | `R101` | % (0–100) | Probability of precipitation > 0.1 mm during the last hour | Wahrscheinlichkeit für Niederschlag > 0,1 mm innerhalb der letzten Stunde |
 | `R110` | % (0–100) | Probability of precipitation > 1.0 mm during the last hour | Wahrscheinlichkeit für Niederschlag > 1,0 mm innerhalb der letzten Stunde |
+| `FF` | m/s | Wind speed | Windgeschwindigkeit |
+| `FX1` | m/s | Maximum wind gust within the last hour | Maximale Windböe innerhalb der letzten Stunde |
 
 **Warum "kumulativ" nicht trivial ist:** Der DWD selbst liefert diese
 Elemente nur stündlich, d.h. jeder Rohwert deckt nur ein einzelnes
@@ -75,6 +97,16 @@ seltener. Der berechnete Wert liegt deshalb tendenziell etwas **zu
 hoch** gegenüber der tatsächlichen Wahrscheinlichkeit. Er ist die beste
 Näherung, die sich aus den öffentlich verfügbaren MOSMIX-Stundenwerten
 bilden lässt, aber keine von DWD selbst berechnete Größe.
+
+**Wind:** Hier wird nichts kombiniert, sondern schlicht das Maximum über
+die Stundenwerte des Zeitraums genommen (`max(FF)` bzw. `max(FX1)` über
+die nächsten N Stunden). Bei `FF` ist das der höchste stündliche
+Windgeschwindigkeitswert, bei `FX1` die höchste Böe, die der DWD für
+irgendeine dieser Stunden erwartet. Da `FF` selbst nur ein
+Stunden-Rasterwert ist, kann eine kurze Windspitze zwischen zwei
+Stunden darin untergehen — deshalb gibt es zusätzlich den Böen-Sensor.
+Fehlt für eine der Stunden ein Wert, wird der Sensor "nicht verfügbar"
+statt ein möglicherweise zu niedriges Maximum anzuzeigen.
 
 Jeder Sensor hat als Attribut `hourly_values` die einzelnen
 Rohwahrscheinlichkeiten, aus denen sich der angezeigte Wert
@@ -125,7 +157,10 @@ Verbindung zum/Zugehörigkeit zum DWD.
 - Da MOSMIX_L nur stündliche Zeitschritte liefert, überschneidet sich
   das betrachtete Zeitfenster leicht mit der laufenden Stunde (bis zu
   ~1h Rückblick statt rein zukunftsgerichtet 0h).
-- Beim Ändern des Standorts über den Options-Flow werden alle 9 Sensoren
+- Die Wind-Werte sind das Maximum über Stundenwerte einer Modellvorhersage
+  für den Stationsstandort; lokale Windverhältnisse (Straßenschluchten,
+  Hanglagen) kann sie nicht abbilden.
+- Beim Ändern des Standorts über den Options-Flow werden alle 15 Sensoren
   auf die neue nächstgelegene Station umgestellt; die bisherige
   Vorhersagehistorie (Sensor-Verlauf) bleibt unter derselben Entity-ID
   erhalten, bezieht sich aber ab dem Umschaltzeitpunkt auf den neuen Ort.

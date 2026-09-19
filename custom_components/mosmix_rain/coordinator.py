@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, UPDATE_INTERVAL_MINUTES
-from .dwd_mosmix import MosmixError, fetch_rain_forecast, load_station_catalog
+from .dwd_mosmix import MosmixError, fetch_forecast, load_station_catalog
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,12 +31,12 @@ class MosmixRainCoordinator(DataUpdateCoordinator[dict]):
         if self._stations is None:
             self._stations = load_station_catalog()
         try:
-            return fetch_rain_forecast(self._stations, self.latitude, self.longitude)
+            return fetch_forecast(self._stations, self.latitude, self.longitude)
         except MosmixError:
             # Retry once with a freshly downloaded station catalog, in case
             # a station id disappeared from the DWD catalog in the meantime.
             self._stations = load_station_catalog()
-            return fetch_rain_forecast(self._stations, self.latitude, self.longitude)
+            return fetch_forecast(self._stations, self.latitude, self.longitude)
 
     async def _async_update_data(self) -> dict:
         try:

@@ -9,7 +9,7 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
-from .dwd_mosmix import MosmixError, fetch_rain_forecast, load_station_catalog
+from .dwd_mosmix import MosmixError, fetch_forecast, load_station_catalog
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ def _coordinate_schema(default_lat: float, default_lon: float) -> vol.Schema:
 async def _validate_coordinates(hass: HomeAssistant, latitude: float, longitude: float) -> dict:
     """Fetch a forecast for the given coordinates, raising MosmixError on failure."""
     stations = await hass.async_add_executor_job(load_station_catalog)
-    return await hass.async_add_executor_job(fetch_rain_forecast, stations, latitude, longitude)
+    return await hass.async_add_executor_job(fetch_forecast, stations, latitude, longitude)
 
 
 class MosmixRainConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):

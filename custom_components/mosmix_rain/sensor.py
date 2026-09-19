@@ -1,7 +1,7 @@
 """Sensor platform for MOSMIX Rain Predict."""
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -16,22 +16,21 @@ async def async_setup_entry(
 ) -> None:
     coordinator: MosmixRainCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities = [
-        MosmixRainProbabilitySensor(coordinator, entry, element, hours)
+        MosmixWindowSensor(coordinator, entry, element, hours)
         for element in ELEMENTS
         for hours in FORECAST_HOURS
     ]
     async_add_entities(entities)
 
 
-class MosmixRainProbabilitySensor(CoordinatorEntity[MosmixRainCoordinator], SensorEntity):
-    """Probability that the event occurs at least once within the next N hours.
+class MosmixWindowSensor(CoordinatorEntity[MosmixRainCoordinator], SensorEntity):
+    """One MOSMIX element aggregated over the next N hours.
 
-    This is a combined ("at least one of the next N hourly buckets rains")
-    probability, not a single-hour snapshot N hours from now - see
-    dwd_mosmix._combine_probabilities for the exact formula and its caveats.
+    Rain elements are the combined "at least once within N hours"
+    probability (see dwd_mosmix._combine_probabilities for the formula and
+    its caveats), wind elements the highest value expected within N hours.
     """
 
-    _attr_native_unit_of_measurement = "%"
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(
@@ -46,6 +45,9 @@ class MosmixRainProbabilitySensor(CoordinatorEntity[MosmixRainCoordinator], Sens
         self._hours = hours
         self._attr_name = f"{element['name']} innerhalb {hours}h"
         self._attr_icon = element["icon"]
+        self._attr_native_unit_of_measurement = element["unit"]
+        if element["device_class"]:
+            self._attr_device_class = SensorDeviceClass(element["device_class"])
         self._attr_unique_id = f"{entry.entry_id}_{element['unique_id']}_{hours}h"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},

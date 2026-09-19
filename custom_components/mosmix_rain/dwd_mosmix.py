@@ -21,9 +21,20 @@ KMZ_URL_TEMPLATE = (
     "single_stations/{station}/kml/MOSMIX_L_LATEST_{station}.kmz"
 )
 FORECAST_HOURS = (2, 4, 8)
+# element -> how the hourly values of a window are aggregated:
+#   "probability": combined as "at least once" (percent values)
+#   "max": highest value inside the window (wind, m/s)
 # wwP: probability of any precipitation within the last hour (general).
 # R101/R110: probability of precipitation exceeding 0.1mm / 1.0mm within the last hour.
-ELEMENT_NAMES = ("wwP", "R101", "R110")
+# FF: wind speed; FX1: maximum wind gust within the last hour.
+ELEMENT_KINDS = {
+    "wwP": "probability",
+    "R101": "probability",
+    "R110": "probability",
+    "FF": "max",
+    "FX1": "max",
+}
+ELEMENT_NAMES = tuple(ELEMENT_KINDS)
 
 DWD_NS = "https://opendata.dwd.de/weather/lib/pointforecast_dwd_extension_V1_0.xsd"
 NS = {"kml": "http://www.opengis.net/kml/2.2", "dwd": DWD_NS}
@@ -147,36 +158,42 @@ def _combine_probabilities(hourly_values: list[int | None]) -> int | None:
     return round((1 - no_rain_at_all) * 100)
 
 
-def _window_probability(timesteps, values, now, hours):
-    """Probability that the event occurs at least once in the next `hours` hours.
+def _window_value(kind, timesteps, values, now, hours):
+    """Aggregate an element over the next `hours` hours.
 
-    Combines the hourly buckets strictly after `now`, i.e. timesteps
+    Uses the hourly buckets strictly after `now`, i.e. timesteps
     (now, now+hours] on the hourly grid - up to ~1h of look-back overlap
     with the present is inherent to hourly-resolution source data.
+    Returns (aggregated value, hourly values used, window end).
     """
     start_idx = next((i for i, t in enumerate(timesteps) if t > now), None)
     if start_idx is None:
         return None, [], None
-    window_idx = range(start_idx, min(start_idx + hours, len(timesteps)))
-    window_idx = list(window_idx)
+    window_idx = list(range(start_idx, min(start_idx + hours, len(timesteps))))
     if len(window_idx) < hours:
         return None, [], None  # forecast horizon too short (stale/delayed run)
 
-    hourly_values = [None if values[i] == "-" else round(float(values[i])) for i in window_idx]
-    combined = _combine_probabilities(hourly_values)
-    window_end = timesteps[window_idx[-1]]
-    return combined, hourly_values, window_end
+    decimals = 0 if kind == "probability" else 1
+    hourly_values = [
+        None if values[i] == "-" else round(float(values[i]), decimals or None)
+        for i in window_idx
+    ]
+    if kind == "probability":
+        aggregated = _combine_probabilities(hourly_values)
+    else:
+        aggregated = None if any(v is None for v in hourly_values) else max(hourly_values)
+    return aggregated, hourly_values, timesteps[window_idx[-1]]
 
 
-def fetch_rain_forecast(
+def fetch_forecast(
     stations: list[dict],
     latitude: float,
     longitude: float,
     element_names: tuple[str, ...] = ELEMENT_NAMES,
     forecast_hours: tuple[int, ...] = FORECAST_HOURS,
 ) -> dict:
-    """Fetch, for the nearest station, the probability of the event occurring
-    at least once within the next 2/4/8 hours (not a single-hour snapshot).
+    """Fetch, for the nearest station, per element and window (2/4/8h) either
+    the combined "at least once" probability or the maximum value (wind).
     """
     station = find_nearest_station(stations, latitude, longitude)
     kml_bytes = _load_kml(station["id"])
@@ -196,9 +213,11 @@ def fetch_rain_forecast(
         values = values_by_element[element]
         by_window = {}
         for hours in forecast_hours:
-            combined, hourly_values, window_end = _window_probability(timesteps, values, now, hours)
+            value, hourly_values, window_end = _window_value(
+                ELEMENT_KINDS[element], timesteps, values, now, hours
+            )
             by_window[hours] = {
-                "value": combined,
+                "value": value,
                 "hourly_values": hourly_values,
                 "window_end": window_end,
             }

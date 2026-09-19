@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "MOSMIX Rain Predict",
-        "description": "Regenwahrscheinlichkeit auf Basis von DWD MOSMIX_L (Element wwP) für die nächstgelegene Wetterstation.",
+        "description": "Regenwahrscheinlichkeit und Wind auf Basis von DWD MOSMIX_L für die nächstgelegene Wetterstation.",
         "data": {
           "latitude": "Breitengrad",
           "longitude": "Längengrad"
@@ -21,7 +21,7 @@
     "step": {
       "init": {
         "title": "MOSMIX Rain Predict – Standort ändern",
-        "description": "Neuer Standort für die Regenwahrscheinlichkeits-Sensoren. Die nächstgelegene DWD-Station wird automatisch neu ermittelt.",
+        "description": "Neuer Standort für die Regen- und Wind-Sensoren. Die nächstgelegene DWD-Station wird automatisch neu ermittelt.",
         "data": {
           "latitude": "Breitengrad",
           "longitude": "Längengrad"
